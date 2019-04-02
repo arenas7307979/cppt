@@ -31,6 +31,17 @@ bool LineProjectionFactor::Evaluate(double const* const* parameters_raw, double*
             l.dot(ept);
     residuals = sqrt_info * residuals;
 
+    Eigen::Matrix<double, 6, 6> Tcw_plucker;
+    Tcw_plucker.block<3,3>(0,0) = Tcw.so3().matrix();
+    Tcw_plucker.block<3,3>(3,3) = Tcw.so3().matrix();
+    Tcw_plucker.block<3,3>(0,3) = Sophus::SO3d::hat(Tcw.translation()) * (Tcw.so3().matrix());
+
+    Eigen::Matrix<double, 6, 6> Tcb_plucker;
+    Tcb_plucker.block<3,3>(0,0) = Tcb.so3().matrix();
+    Tcb_plucker.block<3,3>(3,3) = Tcb.so3().matrix();
+    Tcb_plucker.block<3,3>(0,3) = Sophus::SO3d::hat(Tcb.translation()) * (Tcb.so3().matrix());
+
+
     if(jacobians_raw) {
         Eigen::Matrix<double, 2, 3> reduce;
         double m01 = mc.head<2>().norm();
@@ -53,29 +64,19 @@ bool LineProjectionFactor::Evaluate(double const* const* parameters_raw, double*
                 mc_hat = hat(mc),
                 tbc_hat = hat(p_bc), twb_hat = hat(p_wb);
 
-        Eigen::Matrix<double, 6, 6> Tcw_plucker;
-        Tcw_plucker.block<3,3>(0,0) = Tcw.so3().matrix();
-        Tcw_plucker.block<3,3>(3,3) = Tcw.so3().matrix();
-        Tcw_plucker.block<3,3>(0,3) = Sophus::SO3d::hat(Tcw.translation()) * (Tcw.so3().matrix());
-
-        Eigen::Matrix<double, 6, 6> Tcb_plucker;
-        Tcb_plucker.block<3,3>(0,0) = Tcb.so3().matrix();
-        Tcb_plucker.block<3,3>(3,3) = Tcb.so3().matrix();
-        Tcb_plucker.block<3,3>(0,3) = Sophus::SO3d::hat(Tcb.translation()) * (Tcb.so3().matrix());
-
         if(jacobians_raw[0]) {
             Eigen::Map<Eigen::Matrix<double, 2, 7, Eigen::RowMajor>> Jwb(jacobians_raw[0]);
             Eigen::Matrix<double, 3, 6> J;
-            Eigen::Matrix<double, 6, 3> dLc_Pwb;
-            dLc_Pwb.setZero();
-            dLc_Pwb.topRows(3) =  Rbw * lw_hat;
-            //Eigen::Matrix<double, 3, 3> K_dLc_Pwb = Sophus::Upper_Transformation(Tcb, dLc_Pwb);
-            Eigen::Matrix<double, 3, 3> K_dLc_Pwb = (Tcb_plucker * dLc_Pwb).topRows(3);
-            Eigen::Matrix<double, 6, 3> dLc_qwb;
-            dLc_qwb.topRows(3) = mb_hat;
-            dLc_qwb.bottomRows(3) = Sophus::SO3d::hat(Rbw * lw);
-            Eigen::Matrix<double, 3, 3> K_dLc_qwb = (Tcb_plucker * dLc_qwb).topRows(3);
-            J.leftCols<3>() = K_dLc_Pwb;
+            Eigen::Matrix<double, 6, 3> dLb_pwb;
+            dLb_pwb.setZero();
+            dLb_pwb.topRows(3) =  Rbw * lw_hat;
+            //Eigen::Matrix<double, 3, 3> K_dLc_pwb = Sophus::Upper_Transformation(Tcb, dLb_pwb);
+            Eigen::Matrix<double, 3, 3> K_dLc_pwb = (Tcb_plucker * dLb_pwb).topRows(3);
+            Eigen::Matrix<double, 6, 3> dLb_qwb;
+            dLb_qwb.topRows(3) = mb_hat;
+            dLb_qwb.bottomRows(3) = Sophus::SO3d::hat(Rbw * lw);
+            Eigen::Matrix<double, 3, 3> K_dLc_qwb = (Tcb_plucker * dLb_qwb).topRows(3);
+            J.leftCols<3>() = K_dLc_pwb;
             J.rightCols<3>() = K_dLc_qwb;
             Jwb.leftCols<6>() = reduce * J;
             Jwb.rightCols<1>().setZero();
@@ -193,8 +194,18 @@ bool LineSlaveProjectionFactor::Evaluate(double const* const* parameters_raw, do
         if(jacobians_raw[0]) {
             Eigen::Map<Eigen::Matrix<double, 2, 7, Eigen::RowMajor>> Jwb(jacobians_raw[0]);
             Eigen::Matrix<double, 3, 6> J;
-            J.leftCols<3>() = Rsw * lw_hat;
-            J.rightCols<3>() = Rsb * (mb_hat - tbc_hat * lb_hat) + tsm_hat * Rsb * lb_hat;
+            Eigen::Matrix<double, 6, 3> dLb_pwb;
+            dLb_pwb.setZero();
+            dLb_pwb.topRows(3) =  Rbw * lw_hat;
+            Eigen::Matrix<double, 3, 3> K_dLs_pwb = (Tsb_plucker * dLb_pwb).topRows(3);
+            Eigen::Matrix<double, 6, 3> dLb_qwb;
+            dLb_qwb.topRows(3) = mb_hat;
+            dLb_qwb.bottomRows(3) = Sophus::SO3d::hat(Rbw * lw);
+            Eigen::Matrix<double, 3, 3> K_dLs_qwb = (Tsb_plucker * dLb_qwb).topRows(3);
+            J.leftCols<3>() = K_dLs_pwb;
+            J.rightCols<3>() = K_dLs_qwb;
+            //J.leftCols<3>() = Rsw * lw_hat;
+            //J.rightCols<3>() = Rsb * (mb_hat - tbc_hat * lb_hat) + tsm_hat * Rsb * lb_hat;
             Jwb.leftCols<6>() = reduce * J;
             Jwb.rightCols<1>().setZero();
         }
@@ -202,8 +213,21 @@ bool LineSlaveProjectionFactor::Evaluate(double const* const* parameters_raw, do
         if(jacobians_raw[1]) {
             Eigen::Map<Eigen::Matrix<double, 2, 7, Eigen::RowMajor>> Jbc(jacobians_raw[1]);
             Eigen::Matrix<double, 3, 6> J;
-            J.leftCols<3>() = Rsb * lb_hat;
-            J.rightCols<3>() = Rsm * mc_hat + tsm_hat * Rsm * lc_hat;
+
+            Eigen::Matrix<double, 6, 3> dLc_pbc;
+            dLc_pbc.setZero();
+            dLc_pbc.topRows(3) =  q_cb.matrix() * lb_hat;
+            Eigen::Matrix<double, 3, 3> K_dLs_pbc = (Tsm_plucker * dLc_pbc).topRows(3);
+
+            Eigen::Matrix<double, 6, 3> dLc_qbc;
+            dLc_qbc.topRows(3) = mc_hat;
+            dLc_qbc.bottomRows(3) = lc_hat;
+            Eigen::Matrix<double, 3, 3> K_dLs_qbc = (Tsm_plucker * dLc_qbc).topRows(3);
+
+            //J.leftCols<3>() = Rsb * lb_hat;
+            //J.rightCols<3>() = Rsm * mc_hat + tsm_hat * Rsm * lc_hat;
+            J.leftCols<3>() = K_dLs_pbc;
+            J.rightCols<3>() = K_dLs_qbc;
             Jbc.leftCols<6>() = reduce * J;
             Jbc.rightCols<1>().setZero();
         }
@@ -221,9 +245,15 @@ bool LineSlaveProjectionFactor::Evaluate(double const* const* parameters_raw, do
             Eigen::Map<Eigen::Matrix<double, 2, 6, Eigen::RowMajor>> Jline(jacobians_raw[3]);
             Eigen::Vector3d O3x1 = Eigen::Vector3d::Zero();
             Eigen::Matrix<double, 3, 4> dmw_dTh, dlw_dTh;
+            Eigen::Matrix<double, 6, 4> dLw_dTh ;
+            dLw_dTh.setZero();
             dmw_dTh << O3x1, -w1*U.col(2), w1*U.col(1), -w2*U.col(0);
             dlw_dTh << w2*U.col(2),  O3x1, -w2*U.col(0), w1*U.col(1);
-            Jline.leftCols<4>() = reduce * (Rsw * dmw_dTh + (tsm_hat * Rsw - Rsb * tbc_hat * Rbw - Rsw * twb_hat) * dlw_dTh);
+            dLw_dTh.topRows(3) =  dmw_dTh;
+            dLw_dTh.bottomRows(3) = dlw_dTh;
+            Eigen::Matrix<double, 3, 4> K_dLs_Ow = (Tsw_plucker * dLw_dTh).topRows(3);
+            Jline.leftCols<4>() = reduce * K_dLs_Ow;
+            //Jline.leftCols<4>() = reduce * (Rsw * dmw_dTh + (tsm_hat * Rsw - Rsb * tbc_hat * Rbw - Rsw * twb_hat) * dlw_dTh);
             Jline.rightCols<2>().setZero();
         }
     }

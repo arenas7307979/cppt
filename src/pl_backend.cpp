@@ -5,7 +5,7 @@
 #include "ceres/projection_td_factor.h"
 #include "ceres/line_projection_factor.h"
 #include "vins/imu_factor.h"
-#define USE_POINT 1
+#define USE_POINT 0
 
 PLBackEnd::PLBackEnd() {}
 
