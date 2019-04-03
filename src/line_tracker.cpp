@@ -62,7 +62,6 @@ LineTracker::FramePtr LineTracker::InitFrame(const cv::Mat& img, double timestam
         kl.response = kl.lineLength / std::max(frame->img.rows, frame->img.cols);
         cv::LineIterator li(frame->img, cv::Point2f(line[0], line[1]), cv::Point2f(line[2], line[3]));
         kl.numOfPixels = li.count;
-
         frame->v_lines.emplace_back(kl);
     }
 

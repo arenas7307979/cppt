@@ -441,7 +441,7 @@ void PLBackEnd::SolveBAImu() {
 
     ceres::Solver::Options options;
     options.linear_solver_type = ceres::DENSE_SCHUR;
-    options.trust_region_strategy_type = ceres::LEVENBERG_MARQUARDT;
+    options.trust_region_strategy_type = ceres::DOGLEG;
     options.max_num_iterations = max_num_iterations;
     options.num_threads = 8;
 //    options.max_solver_time_in_seconds = max_solver_time_in_seconds; // 50 ms for solver and 50 ms for other
